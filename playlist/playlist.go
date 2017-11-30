@@ -2,15 +2,21 @@ package main
 
 import (
 	"bufio"
+	"encoding/binary"
+	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"time"
 
+	"github.com/boltdb/bolt"
 	"github.com/yhat/scrape"
 	"golang.org/x/net/html"
 	"golang.org/x/net/html/atom"
 )
+
+const boltDatabaseFileName = "songs.bolt"
 
 // PlayedSong is a track played
 type PlayedSong struct {
@@ -51,6 +57,41 @@ func main() {
 
 	}
 
+}
+
+// SaveData pushes the results to a bolt database
+func SaveData(plays []PlayedSong) {
+	db, err := bolt.Open(boltDatabaseFileName, 0600, nil)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer db.Close()
+
+	singleSong := plays[0]
+
+	err = db.Update(func(tx *bolt.Tx) error {
+		b, err := tx.CreateBucketIfNotExists([]byte("plays"))
+		if err != nil {
+			return fmt.Errorf("create bucket: %s", err)
+		}
+
+		id, _ := b.NextSequence()
+		//u.ID = int(id)
+		buf, err := json.Marshal(singleSong)
+		if err != nil {
+			return err
+		}
+
+		// Persist bytes to users bucket.
+		return b.Put(itob(id), buf)
+
+	})
+}
+
+func itob(v uint64) []byte {
+	b := make([]byte, 8)
+	binary.BigEndian.PutUint64(b, uint64(v))
+	return b
 }
 
 // GetStations pulls the current list of stations
