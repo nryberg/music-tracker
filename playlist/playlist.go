@@ -53,6 +53,10 @@ func main() {
 			log.Println(len(results))
 
 			PlaysToStdout(results)
+			err = SaveData(results)
+			if err != nil {
+				log.Println(err)
+			}
 		}
 
 	}
@@ -60,32 +64,32 @@ func main() {
 }
 
 // SaveData pushes the results to a bolt database
-func SaveData(plays []PlayedSong) {
+func SaveData(plays []PlayedSong) error {
 	db, err := bolt.Open(boltDatabaseFileName, 0600, nil)
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer db.Close()
 
-	singleSong := plays[0]
-
 	err = db.Update(func(tx *bolt.Tx) error {
 		b, err := tx.CreateBucketIfNotExists([]byte("plays"))
 		if err != nil {
 			return fmt.Errorf("create bucket: %s", err)
 		}
+		for _, play := range plays {
+			id, _ := b.NextSequence()
+			//u.ID = int(id)
+			buf, err := json.Marshal(play)
+			if err != nil {
+				return err
+			}
 
-		id, _ := b.NextSequence()
-		//u.ID = int(id)
-		buf, err := json.Marshal(singleSong)
-		if err != nil {
-			return err
+			// Persist bytes to users bucket.
+			return b.Put(itob(id), buf)
 		}
-
-		// Persist bytes to users bucket.
-		return b.Put(itob(id), buf)
-
+		return err
 	})
+	return err
 }
 
 func itob(v uint64) []byte {
