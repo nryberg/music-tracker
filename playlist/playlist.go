@@ -33,14 +33,18 @@ func main() {
 
 	log.Println("Playlist Starter")
 
-	stations, err := GetStations("stations.txt")
-
 	plays, err := ReadTracksTest()
 	if err != nil {
 		log.Println(err)
 	}
 
 	log.Println(len(plays))
+
+	err = SaveData(plays)
+	if err != nil {
+		log.Println(err)
+	}
+	// stations, err := GetStations("stations.txt")
 	// if err != nil {
 	// 	log.Println(err)
 	// } else {
@@ -141,6 +145,8 @@ func PlaysToStdout(plays []PlayedSong) {
 // ReadTracksTest uses the saved copy of results for testing only
 func ReadTracksTest() ([]PlayedSong, error) {
 	var playResults []PlayedSong
+
+	station := "test"
 
 	file, err := os.Open("sample.html")
 	if err != nil {
