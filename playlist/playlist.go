@@ -30,37 +30,48 @@ type PlayedSong struct {
 }
 
 func main() {
-	const baseURLPrefix = "https://"
-	const baseURLPostfix = ".iheart.com/music/recently-played/"
-	var url string
 
 	log.Println("Playlist Starter")
 
 	stations, err := GetStations("stations.txt")
-	log.Println(len(stations))
+
+	plays, err := ReadTracksTest()
 	if err != nil {
 		log.Println(err)
-	} else {
-
-		for _, station := range stations {
-			log.Println(station)
-			url = baseURLPrefix + station + baseURLPostfix
-			log.Println(url)
-			results, err := ReadTracks(url, station)
-			if err != nil {
-				panic(err)
-			}
-			log.Println(len(results))
-
-			PlaysToStdout(results)
-			err = SaveData(results)
-			if err != nil {
-				log.Println(err)
-			}
-		}
-
 	}
 
+	log.Println(len(plays))
+	// if err != nil {
+	// 	log.Println(err)
+	// } else {
+	// 	IterateStations(stations)
+	// }
+
+}
+
+// IterateStations walks list of stations
+func IterateStations(stations []string) {
+	const baseURLPrefix = "https://"
+	const baseURLPostfix = ".iheart.com/music/recently-played/"
+
+	var url string
+
+	for _, station := range stations {
+		log.Println(station)
+		url = baseURLPrefix + station + baseURLPostfix
+		log.Println(url)
+		results, err := ReadTracks(url, station)
+		if err != nil {
+			panic(err)
+		}
+		log.Println(len(results))
+
+		PlaysToStdout(results)
+		err = SaveData(results)
+		if err != nil {
+			log.Println(err)
+		}
+	}
 }
 
 // SaveData pushes the results to a bolt database
@@ -87,7 +98,7 @@ func SaveData(plays []PlayedSong) error {
 			// Persist bytes to users bucket.
 			return b.Put(itob(id), buf)
 		}
-		return err
+		return nil
 	})
 	return err
 }
@@ -125,6 +136,66 @@ func PlaysToStdout(plays []PlayedSong) {
 	for _, play := range plays {
 		log.Println(play.station, play.trackTitle)
 	}
+}
+
+// ReadTracksTest uses the saved copy of results for testing only
+func ReadTracksTest() ([]PlayedSong, error) {
+	var playResults []PlayedSong
+
+	file, err := os.Open("sample.html")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer file.Close()
+
+	root, err := html.Parse(file)
+	if err != nil {
+		panic(err)
+	}
+
+	var scanTime string
+	t := time.Now()
+	scanTime = t.Format(time.RFC850)
+
+	var playedDate string
+
+	// Get the play date
+	playDateNode, ok := scrape.Find(root, scrape.ByClass("playlist-date-header"))
+	if ok {
+		dateNode, ok := scrape.Find(playDateNode, scrape.ByTag(atom.Span))
+		if ok {
+			playedDate = scrape.Text(dateNode)
+		}
+
+	}
+
+	var played PlayedSong
+	// grab all articles and print them
+	plays := scrape.FindAll(root, scrape.ByClass("playlist-track-container"))
+	for _, play := range plays {
+		played.scanTime = scanTime
+		played.playDate = playedDate
+		played.station = station
+		played.contentID = scrape.Attr(play, "data-contentid")
+		trackTitleNode, ok := scrape.Find(play, scrape.ByClass("track-title"))
+		if ok {
+			played.trackTitle = scrape.Text(trackTitleNode)
+		}
+		trackArtistNode, ok := scrape.Find(play, scrape.ByClass("track-artist"))
+		if ok {
+			played.trackArtist = scrape.Text(trackArtistNode)
+		}
+
+		playListTrackTimeNode, ok := scrape.Find(play, scrape.ByClass("playlist-track-time"))
+		if ok {
+			timeNode, ok := scrape.Find(playListTrackTimeNode, scrape.ByTag(atom.Span))
+			if ok {
+				played.playTime = scrape.Text(timeNode)
+			}
+		}
+		playResults = append(playResults, played)
+	}
+	return playResults, err
 }
 
 // ReadTracks accepts the url for fetching data and goes and gets it
