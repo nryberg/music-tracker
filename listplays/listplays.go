@@ -1,7 +1,8 @@
 package main
 
 import (
-	"fmt"
+	"encoding/binary"
+	"encoding/json"
 	"log"
 
 	"github.com/boltdb/bolt"
@@ -37,13 +38,26 @@ func FetchPlays() ([]PlayedSong, error) {
 	}
 	defer db.Close()
 
+	var play *PlayedSong
+
 	err = db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte("plays"))
 
 		c := b.Cursor()
 
 		for k, v := c.First(); k != nil; k, v = c.Next() {
-			fmt.Printf("key=%s, value=%s\n", k, v)
+			id := binary.BigEndian.Uint64(k)
+			if err != nil {
+				log.Println(err)
+			}
+			log.Println(id)
+
+			err := json.Unmarshal(v, &play)
+			if err != nil {
+				log.Println(err)
+			}
+			log.Println("value:", len(v))
+			//fmt.Printf("key=%s, value=%s\n", k, v)
 		}
 
 		return nil

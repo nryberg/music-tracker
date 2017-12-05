@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"encoding/binary"
 	"encoding/json"
-	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -86,24 +85,41 @@ func SaveData(plays []PlayedSong) error {
 	}
 	defer db.Close()
 
-	err = db.Update(func(tx *bolt.Tx) error {
-		b, err := tx.CreateBucketIfNotExists([]byte("plays"))
-		if err != nil {
-			return fmt.Errorf("create bucket: %s", err)
-		}
-		for _, play := range plays {
-			id, _ := b.NextSequence()
-			//u.ID = int(id)
-			buf, err := json.Marshal(play)
-			if err != nil {
-				return err
-			}
+	tx, err := db.Begin(true)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
 
-			// Persist bytes to users bucket.
-			return b.Put(itob(id), buf)
+	// Use the transaction...
+	b, err := tx.CreateBucketIfNotExists([]byte("plays"))
+	if err != nil {
+		return err
+	}
+
+	for i, play := range plays {
+
+		log.Println(i, play.trackTitle)
+		id, _ := b.NextSequence()
+		//u.ID = int(id)
+		buf, err := json.Marshal(play)
+		if err != nil {
+			return err
 		}
-		return nil
-	})
+
+		log.Println("Length buf: ", len(buf))
+
+		// Persist bytes to users bucket.
+		err = b.Put(itob(id), buf)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Commit the transaction and check for error.
+	if err := tx.Commit(); err != nil {
+		return err
+	}
 	return err
 }
 
