@@ -12,13 +12,13 @@ const boltDatabaseFileName = "../playlist/songs.bolt"
 
 // PlayedSong is a track played
 type PlayedSong struct {
-	scanTime    string
-	station     string
-	playDate    string
-	playTime    string
-	trackTitle  string
-	trackArtist string
-	contentID   string
+	ScanTime    string
+	Station     string
+	PlayDate    string
+	PlayTime    string
+	TrackTitle  string
+	TrackArtist string
+	ContentID   string
 }
 
 func main() {
@@ -56,7 +56,7 @@ func FetchPlays() ([]PlayedSong, error) {
 			if err != nil {
 				log.Println(err)
 			}
-			log.Println("value:", len(v))
+			log.Println(play.TrackTitle)
 			//fmt.Printf("key=%s, value=%s\n", k, v)
 		}
 

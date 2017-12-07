@@ -19,36 +19,34 @@ const boltDatabaseFileName = "songs.bolt"
 
 // PlayedSong is a track played
 type PlayedSong struct {
-	scanTime    string
-	station     string
-	playDate    string
-	playTime    string
-	trackTitle  string
-	trackArtist string
-	contentID   string
+	ScanTime    string
+	Station     string
+	PlayDate    string
+	PlayTime    string
+	TrackTitle  string
+	TrackArtist string
+	ContentID   string
 }
 
 func main() {
 
 	log.Println("Playlist Starter")
 
-	plays, err := ReadTracksTest()
-	if err != nil {
-		log.Println(err)
-	}
-
-	log.Println(len(plays))
-
-	err = SaveData(plays)
-	if err != nil {
-		log.Println(err)
-	}
-	// stations, err := GetStations("stations.txt")
+	// plays, err := ReadTracksTest()
 	// if err != nil {
 	// 	log.Println(err)
-	// } else {
-	// 	IterateStations(stations)
 	// }
+
+	// err = SaveData(plays)
+	// if err != nil {
+	// 	log.Println(err)
+	// }
+	stations, err := GetStations("stations.txt")
+	if err != nil {
+		log.Println(err)
+	} else {
+		IterateStations(stations)
+	}
 
 }
 
@@ -97,9 +95,11 @@ func SaveData(plays []PlayedSong) error {
 		return err
 	}
 
+	var testPlay *PlayedSong
+
 	for i, play := range plays {
 
-		log.Println(i, play.trackTitle)
+		log.Println(i, play.TrackTitle)
 		id, _ := b.NextSequence()
 		//u.ID = int(id)
 		buf, err := json.Marshal(play)
@@ -107,7 +107,13 @@ func SaveData(plays []PlayedSong) error {
 			return err
 		}
 
-		log.Println("Length buf: ", len(buf))
+		// log.Println(buf)
+
+		err = json.Unmarshal(buf, &testPlay)
+		if err != nil {
+			log.Println(err)
+		}
+		// log.Println(testPlay.TrackTitle)
 
 		// Persist bytes to users bucket.
 		err = b.Put(itob(id), buf)
@@ -154,7 +160,7 @@ func GetStations(filePath string) ([]string, error) {
 func PlaysToStdout(plays []PlayedSong) {
 	//var play PlayedSong
 	for _, play := range plays {
-		log.Println(play.station, play.trackTitle)
+		log.Println(play.Station, play.TrackTitle)
 	}
 }
 
@@ -195,24 +201,24 @@ func ReadTracksTest() ([]PlayedSong, error) {
 	// grab all articles and print them
 	plays := scrape.FindAll(root, scrape.ByClass("playlist-track-container"))
 	for _, play := range plays {
-		played.scanTime = scanTime
-		played.playDate = playedDate
-		played.station = station
-		played.contentID = scrape.Attr(play, "data-contentid")
+		played.ScanTime = scanTime
+		played.PlayDate = playedDate
+		played.Station = station
+		played.ContentID = scrape.Attr(play, "data-contentid")
 		trackTitleNode, ok := scrape.Find(play, scrape.ByClass("track-title"))
 		if ok {
-			played.trackTitle = scrape.Text(trackTitleNode)
+			played.TrackTitle = scrape.Text(trackTitleNode)
 		}
 		trackArtistNode, ok := scrape.Find(play, scrape.ByClass("track-artist"))
 		if ok {
-			played.trackArtist = scrape.Text(trackArtistNode)
+			played.TrackArtist = scrape.Text(trackArtistNode)
 		}
 
 		playListTrackTimeNode, ok := scrape.Find(play, scrape.ByClass("playlist-track-time"))
 		if ok {
 			timeNode, ok := scrape.Find(playListTrackTimeNode, scrape.ByTag(atom.Span))
 			if ok {
-				played.playTime = scrape.Text(timeNode)
+				played.PlayTime = scrape.Text(timeNode)
 			}
 		}
 		playResults = append(playResults, played)
@@ -258,24 +264,24 @@ func ReadTracks(url string, station string) ([]PlayedSong, error) {
 	// grab all articles and print them
 	plays := scrape.FindAll(root, scrape.ByClass("playlist-track-container"))
 	for _, play := range plays {
-		played.scanTime = scanTime
-		played.playDate = playedDate
-		played.station = station
-		played.contentID = scrape.Attr(play, "data-contentid")
+		played.ScanTime = scanTime
+		played.PlayDate = playedDate
+		played.Station = station
+		played.ContentID = scrape.Attr(play, "data-contentid")
 		trackTitleNode, ok := scrape.Find(play, scrape.ByClass("track-title"))
 		if ok {
-			played.trackTitle = scrape.Text(trackTitleNode)
+			played.TrackTitle = scrape.Text(trackTitleNode)
 		}
 		trackArtistNode, ok := scrape.Find(play, scrape.ByClass("track-artist"))
 		if ok {
-			played.trackArtist = scrape.Text(trackArtistNode)
+			played.TrackArtist = scrape.Text(trackArtistNode)
 		}
 
 		playListTrackTimeNode, ok := scrape.Find(play, scrape.ByClass("playlist-track-time"))
 		if ok {
 			timeNode, ok := scrape.Find(playListTrackTimeNode, scrape.ByTag(atom.Span))
 			if ok {
-				played.playTime = scrape.Text(timeNode)
+				played.PlayTime = scrape.Text(timeNode)
 			}
 		}
 		playResults = append(playResults, played)
