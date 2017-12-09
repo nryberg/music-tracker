@@ -32,6 +32,11 @@ type PlayedSong struct {
 }
 
 func main() {
+	err := ClearLoadTable()
+	if err != nil {
+		log.Println(err)
+	}
+
 	plays, err := FetchPlays()
 	if err != nil {
 		log.Println(err)
@@ -43,6 +48,17 @@ func main() {
 		log.Println(err)
 	}
 	log.Println(lastID)
+}
+
+// ClearLoadTable deletes all of the load table records
+func ClearLoadTable() error {
+
+	sqlStatement := `DELETE FROM load ;`
+	_, err = db.Exec(sqlStatement)
+	if err != nil {
+		log.Println(err)
+	}
+	return err
 }
 
 // PushPlaystoDb sends the plays to the load table
