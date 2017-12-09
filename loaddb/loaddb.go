@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"log"
 
-	_ "github.com/lib/pq"
+	"github.com/lib/pq"
 
 	"github.com/boltdb/bolt"
 )
@@ -46,7 +46,7 @@ func main() {
 }
 
 // PushPlaystoDb sends the plays to the load table
-func PushPlaystoDb([]PlayedSong) (int, error) {
+func PushPlaystoDb(plays []PlayedSong) (int, error) {
 	dbinfo := fmt.Sprintf("user=%s password=%s dbname=%s host=%s sslmode=disable",
 		dbUser, dbPassword, dbName, dbHost)
 	db, err := sql.Open("postgres", dbinfo)
@@ -54,14 +54,49 @@ func PushPlaystoDb([]PlayedSong) (int, error) {
 		log.Println(err)
 	}
 	defer db.Close()
-	var lastInsertID int
 
-	err = db.QueryRow("INSERT INTO load(ScanTime) VALUES($1) returning uid;", "Scanned Time").Scan(&lastInsertID)
-
+	txn, err := db.Begin()
 	if err != nil {
-		log.Println(err)
+		log.Fatal(err)
 	}
-	return lastInsertID, err
+
+	stmt, err := txn.Prepare(pq.CopyIn("load", "scantime", "station", "playdate", "playtime", "tracktitle", "trackartist", "contentid"))
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	//err = db.QueryRow("INSERT INTO load(ScanTime) VALUES($1) returning ID;", "Scanned Time").Scan(&lastInsertID)
+
+	// if err != nil {
+	// 	log.Println(err)
+	// }
+
+	var play PlayedSong
+
+	for _, play = range plays {
+
+		_, err = stmt.Exec(play.ScanTime, play.Station, play.PlayDate, play.PlayTime, play.TrackTitle, play.TrackArtist, play.ContentID)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+	}
+	_, err = stmt.Exec()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	err = stmt.Close()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	err = txn.Commit()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	return 1, err
 }
 
 // FetchPlays pulls the plays out of the boltdb
