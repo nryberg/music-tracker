@@ -32,26 +32,46 @@ type PlayedSong struct {
 }
 
 func main() {
+
+	log.Println("Clearing load table")
 	err := ClearLoadTable()
 	if err != nil {
 		log.Println(err)
 	}
 
+	log.Println("Fetching songs")
 	plays, err := FetchPlays()
 	if err != nil {
 		log.Println(err)
 	}
 
+	log.Println("Pushing data to db")
 	var lastID int
 	lastID, err = PushPlaystoDb(plays)
 	if err != nil {
 		log.Println(err)
 	}
 	log.Println(lastID)
+
+	log.Println("Updating fact tables")
+	err = UpdateData()
+	if err != nil {
+		log.Println(err)
+	}
+
+	log.Println("Done")
+
 }
 
 // ClearLoadTable deletes all of the load table records
 func ClearLoadTable() error {
+	dbinfo := fmt.Sprintf("user=%s password=%s dbname=%s host=%s sslmode=disable",
+		dbUser, dbPassword, dbName, dbHost)
+	db, err := sql.Open("postgres", dbinfo)
+	if err != nil {
+		log.Println(err)
+	}
+	defer db.Close()
 
 	sqlStatement := `DELETE FROM load ;`
 	_, err = db.Exec(sqlStatement)
@@ -150,4 +170,32 @@ func FetchPlays() ([]PlayedSong, error) {
 		return nil
 	})
 	return plays, err
+}
+
+// UpdateData goes through the load table and updates the fact tables
+func UpdateData() error {
+	dbinfo := fmt.Sprintf("user=%s password=%s dbname=%s host=%s sslmode=disable",
+		dbUser, dbPassword, dbName, dbHost)
+	db, err := sql.Open("postgres", dbinfo)
+	if err != nil {
+		log.Println(err)
+	}
+	defer db.Close()
+
+	// Update the artists
+
+	sqlStatement := `INSERT INTO artist (name)
+	SELECT trackartist
+		FROM public.load as ld
+		LEFT JOIN public.artist as art
+			on ld.trackartist = art.name
+		 WHERE art.name is null
+		GROUP BY trackartist
+		 ;`
+	_, err = db.Exec(sqlStatement)
+	if err != nil {
+		log.Println(err)
+	}
+	return err
+
 }
