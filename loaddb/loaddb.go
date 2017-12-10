@@ -46,12 +46,10 @@ func main() {
 	}
 
 	log.Println("Pushing data to db")
-	var lastID int
-	lastID, err = PushPlaystoDb(plays)
+	_, err = PushPlaystoDb(plays)
 	if err != nil {
 		log.Println(err)
 	}
-	log.Println(lastID)
 
 	log.Println("Updating fact tables")
 	err = UpdateData()
@@ -196,6 +194,45 @@ func UpdateData() error {
 	if err != nil {
 		log.Println(err)
 	}
+
+	sqlStatement = `INSERT INTO song (title, contentid)
+	SELECT tracktitle, cast(ld.contentid as int) as contentid
+		FROM public.load as ld
+		LEFT JOIN public.song as sng
+			on cast(ld.contentid as int) = sng.contentid
+		 WHERE sng.title is null
+		GROUP BY ld.tracktitle, ld.contentid
+		;`
+
+	_, err = db.Exec(sqlStatement)
+	if err != nil {
+		log.Println(err)
+	}
 	return err
 
+	sqlStatement = `INSERT INTO PLAY (scantime, station, contentid, playtime)
+    SELECT 
+	TO_TIMESTAMP(scantime, 'day, dd-mon-yy HH24:MI:SS') as converteddate,
+    station,
+    cast(contentid as int) as contentid,
+    TO_TIMESTAMP(CONCAT(playdate, ', 2017 ', playtime), 'day, mon-dd, yyyy HH:MI AM') as convertplaytime
+	FROM public.load as ld
+   ;`
+	_, err = db.Exec(sqlStatement)
+	if err != nil {
+		log.Println(err)
+	}
+	return err
+
+	sqlStatement = `DELETE FROM public.play
+	WHERE ID NOT IN (
+	SELECT min(id) as id
+	FROM public.play
+    GROUP BY scantime, station, contentid, playtime)
+	;`
+	_, err = db.Exec(sqlStatement)
+	if err != nil {
+		log.Println(err)
+	}
+	return err
 }
