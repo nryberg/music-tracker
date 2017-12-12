@@ -34,21 +34,27 @@ type PlayedSong struct {
 func main() {
 
 	log.Println("Clearing load table")
-	err := ClearLoadTable()
+	rows, err := ClearLoadTable()
 	if err != nil {
 		log.Println(err)
+	} else {
+		log.Println("Rows affected: ", rows)
 	}
 
 	log.Println("Fetching songs")
 	plays, err := FetchPlays()
 	if err != nil {
 		log.Println(err)
+	} else {
+		log.Println("Found Plays:", len(plays))
 	}
 
 	log.Println("Pushing data to db")
-	_, err = PushPlaystoDb(plays)
+	rows, err = PushPlaystoDb(plays)
 	if err != nil {
 		log.Println(err)
+	} else {
+		log.Println("Pushed rows:", rows)
 	}
 
 	log.Println("Updating fact tables")
@@ -62,7 +68,7 @@ func main() {
 }
 
 // ClearLoadTable deletes all of the load table records
-func ClearLoadTable() error {
+func ClearLoadTable() (int64, error) {
 	dbinfo := fmt.Sprintf("user=%s password=%s dbname=%s host=%s sslmode=disable",
 		dbUser, dbPassword, dbName, dbHost)
 	db, err := sql.Open("postgres", dbinfo)
@@ -71,16 +77,20 @@ func ClearLoadTable() error {
 	}
 	defer db.Close()
 
+	var rows int64
+
 	sqlStatement := `DELETE FROM load ;`
-	_, err = db.Exec(sqlStatement)
+	effect, err := db.Exec(sqlStatement)
 	if err != nil {
 		log.Println(err)
 	}
-	return err
+	rows, err = effect.RowsAffected()
+
+	return rows, err
 }
 
 // PushPlaystoDb sends the plays to the load table
-func PushPlaystoDb(plays []PlayedSong) (int, error) {
+func PushPlaystoDb(plays []PlayedSong) (int64, error) {
 	dbinfo := fmt.Sprintf("user=%s password=%s dbname=%s host=%s sslmode=disable",
 		dbUser, dbPassword, dbName, dbHost)
 	db, err := sql.Open("postgres", dbinfo)
@@ -93,6 +103,8 @@ func PushPlaystoDb(plays []PlayedSong) (int, error) {
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	var counter int64
 
 	stmt, err := txn.Prepare(pq.CopyIn("load", "scantime", "station", "playdate", "playtime", "tracktitle", "trackartist", "contentid"))
 	if err != nil {
@@ -112,6 +124,8 @@ func PushPlaystoDb(plays []PlayedSong) (int, error) {
 		_, err = stmt.Exec(play.ScanTime, play.Station, play.PlayDate, play.PlayTime, play.TrackTitle, play.TrackArtist, play.ContentID)
 		if err != nil {
 			log.Fatal(err)
+		} else {
+			counter++
 		}
 
 	}
@@ -130,7 +144,7 @@ func PushPlaystoDb(plays []PlayedSong) (int, error) {
 		log.Fatal(err)
 	}
 
-	return 1, err
+	return counter, err
 }
 
 // FetchPlays pulls the plays out of the boltdb
@@ -180,6 +194,7 @@ func UpdateData() error {
 	}
 	defer db.Close()
 
+	var effect sql.Result
 	// Update the artists
 
 	sqlStatement := `INSERT INTO artist (name)
@@ -190,9 +205,12 @@ func UpdateData() error {
 		 WHERE art.name is null
 		GROUP BY trackartist
 		 ;`
-	_, err = db.Exec(sqlStatement)
+	effect, err = db.Exec(sqlStatement)
+	rows, err := effect.RowsAffected()
 	if err != nil {
 		log.Println(err)
+	} else {
+		log.Println(" - Artists inserted : ", rows)
 	}
 
 	sqlStatement = `INSERT INTO song (title, contentid)
@@ -204,13 +222,15 @@ func UpdateData() error {
 		GROUP BY ld.tracktitle, ld.contentid
 		;`
 
-	_, err = db.Exec(sqlStatement)
+	effect, err = db.Exec(sqlStatement)
+	rows, _ = effect.RowsAffected()
 	if err != nil {
 		log.Println(err)
+	} else {
+		log.Println(" - Songs inserted : ", rows)
 	}
-	return err
 
-	sqlStatement = `INSERT INTO PLAY (scantime, station, contentid, playtime)
+	sqlStatement = `INSERT INTO PLAY (scantime, station, contentid, playtime) 
     SELECT 
 	TO_TIMESTAMP(scantime, 'day, dd-mon-yy HH24:MI:SS') as converteddate,
     station,
@@ -218,11 +238,29 @@ func UpdateData() error {
     TO_TIMESTAMP(CONCAT(playdate, ', 2017 ', playtime), 'day, mon-dd, yyyy HH:MI AM') as convertplaytime
 	FROM public.load as ld
    ;`
-	_, err = db.Exec(sqlStatement)
+	effect, err = db.Exec(sqlStatement)
+	rows, _ = effect.RowsAffected()
 	if err != nil {
 		log.Println(err)
+	} else {
+		log.Println(" - Plays inserted : ", rows)
 	}
-	return err
+
+	sqlStatement = `UPDATE song 
+	SET artistid=arts.artistid
+	FROM (SELECT cast(contentid as int) as contentid, art.id as artistid
+		FROM public.load as ld
+		JOIN public.artist as art
+			ON ld.trackartist = art.name) as arts
+	WHERE song.contentid = arts.contentid
+	AND song.artistid IS NULL;`
+	effect, err = db.Exec(sqlStatement)
+	rows, _ = effect.RowsAffected()
+	if err != nil {
+		log.Println(err)
+	} else {
+		log.Println(" - Artist ID's updated : ", rows)
+	}
 
 	sqlStatement = `DELETE FROM public.play
 	WHERE ID NOT IN (
@@ -230,9 +268,12 @@ func UpdateData() error {
 	FROM public.play
     GROUP BY scantime, station, contentid, playtime)
 	;`
-	_, err = db.Exec(sqlStatement)
+	effect, err = db.Exec(sqlStatement)
+	rows, _ = effect.RowsAffected()
 	if err != nil {
 		log.Println(err)
+	} else {
+		log.Println(" - Duplicates Removed : ", rows)
 	}
 	return err
 }
